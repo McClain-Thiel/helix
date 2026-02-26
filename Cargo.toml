@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/helix-core",
+    "crates/helix-formats",
+    "crates/helix-version",
+    "apps/desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+authors = ["McClain Thiel"]
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+nom = "7.1"
+regex = "1.12"
+
+# Internal crates
+helix-core = { path = "crates/helix-core" }
+helix-formats = { path = "crates/helix-formats" }
+helix-version = { path = "crates/helix-version" }

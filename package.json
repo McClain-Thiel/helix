@@ -1,0 +1,16 @@
+{
+  "name": "helix-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @helix/desktop dev",
+    "build": "pnpm --filter @helix/desktop build",
+    "test": "pnpm -r test",
+    "test:rust": "cargo test --workspace",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}

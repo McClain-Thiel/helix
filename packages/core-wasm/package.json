@@ -1,0 +1,6 @@
+{
+  "name": "@helix/core-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phase 2 WASM build of helix-core"
+}
