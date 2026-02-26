@@ -328,8 +328,8 @@ export default function App() {
                 <CircularMap
                   sequence={sequence}
                   enzymes={DEMO_ENZYMES}
-                  width={Math.min(editorSize.width, editorSize.height)}
-                  height={Math.min(editorSize.width, editorSize.height)}
+                  width={editorSize.width}
+                  height={editorSize.height}
                 />
               )}
               {activeView === 'sequence' && (
