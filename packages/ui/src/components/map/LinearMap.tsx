@@ -1,10 +1,10 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { CircularMapRenderer } from './CircularMapRenderer';
-import type { CircularMapEvent } from './CircularMapRenderer';
+import React, { useRef, useEffect, useState } from 'react';
+import { LinearMapRenderer } from './LinearMapRenderer';
+import type { LinearMapEvent } from './LinearMapRenderer';
 import { useSelectionStore } from '../../store/selectionStore';
 import type { SequenceDto, EnzymeDto } from '../../types/sequence';
 
-interface CircularMapProps {
+interface LinearMapProps {
   sequence: SequenceDto;
   enzymes?: EnzymeDto[];
   width?: number;
@@ -12,18 +12,17 @@ interface CircularMapProps {
 }
 
 /**
- * React wrapper for the imperative CircularMapRenderer.
- * Uses a container div so each mount gets a fresh canvas + WebGL context.
- * Wires renderer events to Zustand selection store.
+ * React wrapper for the imperative LinearMapRenderer.
+ * Uses the same container div pattern as CircularMap.
  */
-export function CircularMap({
+export function LinearMap({
   sequence,
   enzymes = [],
-  width = 500,
-  height = 500,
-}: CircularMapProps) {
+  width = 800,
+  height = 300,
+}: LinearMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<CircularMapRenderer | null>(null);
+  const rendererRef = useRef<LinearMapRenderer | null>(null);
   const selectedFeatureId = useSelectionStore((s) => s.selectedFeatureId);
   const selection = useSelectionStore((s) => s.range);
   const selectFeature = useSelectionStore((s) => s.selectFeature);
@@ -31,9 +30,9 @@ export function CircularMap({
   const setCursorPosition = useSelectionStore((s) => s.setCursorPosition);
   const [error, setError] = useState<string | null>(null);
 
-  // Stable event handler ref so we don't re-attach on every render
-  const handleEventRef = useRef<(event: CircularMapEvent) => void>(() => {});
-  handleEventRef.current = (event: CircularMapEvent) => {
+  // Stable event handler ref
+  const handleEventRef = useRef<(event: LinearMapEvent) => void>(() => {});
+  handleEventRef.current = (event: LinearMapEvent) => {
     switch (event.type) {
       case 'featureClick':
         selectFeature(event.featureId ?? null);
@@ -58,18 +57,16 @@ export function CircularMap({
 
     let cancelled = false;
 
-    // Create a fresh canvas for each mount
     const canvas = document.createElement('canvas');
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     canvas.style.cursor = 'crosshair';
     container.appendChild(canvas);
 
-    const renderer = new CircularMapRenderer();
+    const renderer = new LinearMapRenderer();
     rendererRef.current = renderer;
 
-    // Wire events through stable ref
-    const eventHandler = (event: CircularMapEvent) => handleEventRef.current(event);
+    const eventHandler = (event: LinearMapEvent) => handleEventRef.current(event);
     renderer.on(eventHandler);
 
     renderer
@@ -88,7 +85,7 @@ export function CircularMap({
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error('Pixi.js init failed:', err);
+        console.error('Linear map init failed:', err);
         setError(String(err));
       });
 
@@ -104,7 +101,7 @@ export function CircularMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync data changes to renderer
+  // Sync data
   useEffect(() => {
     rendererRef.current?.update({
       sequence,
@@ -122,10 +119,7 @@ export function CircularMap({
   if (error) {
     return (
       <div style={{ color: '#ef6b6b', padding: 20, textAlign: 'center' }}>
-        <p>Map renderer error: {error}</p>
-        <p style={{ fontSize: 11, opacity: 0.6, marginTop: 8 }}>
-          WebGL may not be available. Try reloading.
-        </p>
+        <p>Linear map renderer error: {error}</p>
       </div>
     );
   }

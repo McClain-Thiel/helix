@@ -9,4 +9,6 @@ export * from './store/viewStore';
 export * from './components/sequence/SequenceView';
 export * from './components/map/CircularMap';
 export * from './components/map/CircularMapRenderer';
+export * from './components/map/LinearMap';
+export * from './components/map/LinearMapRenderer';
 export * from './components/common/FeatureIcon';

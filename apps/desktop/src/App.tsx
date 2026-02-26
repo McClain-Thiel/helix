@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   tokens,
   useEditorStore,
@@ -7,6 +7,7 @@ import {
   useViewStore,
   SequenceView,
   CircularMap,
+  LinearMap,
   FeatureIcon,
   getFeatureColor,
 } from '@helix/ui';
@@ -63,11 +64,42 @@ export default function App() {
 
   const [activeView, setActiveView] = useState<'map' | 'linear' | 'sequence'>('map');
   const [bottomTab, setBottomTab] = useState('enzymes');
+  const editorAreaRef = useRef<HTMLDivElement>(null);
+  const [editorSize, setEditorSize] = useState({ width: 600, height: 400 });
 
   // Load demo sequence on mount
   useEffect(() => {
     openSequence(DEMO_SEQUENCE);
   }, [openSequence]);
+
+  // Measure editor area size
+  useEffect(() => {
+    const el = editorAreaRef.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setEditorSize({ width: Math.floor(width), height: Math.floor(height) });
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Space key to toggle between circular and linear map
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't trigger if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === 'Space' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setActiveView((v) => v === 'map' ? 'linear' : v === 'linear' ? 'map' : v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const sequence = activeSeq ?? DEMO_SEQUENCE;
   const selectedFeature = sequence.features.find((f) => f.id === selectedFeatureId);
@@ -281,6 +313,7 @@ export default function App() {
           {/* Editor area */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div
+              ref={editorAreaRef}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -291,67 +324,24 @@ export default function App() {
                 overflow: 'hidden',
               }}
             >
-              {activeView === 'map' && (
+              {activeView === 'map' && editorSize.width > 0 && (
                 <CircularMap
                   sequence={sequence}
                   enzymes={DEMO_ENZYMES}
-                  width={480}
-                  height={440}
+                  width={Math.min(editorSize.width, editorSize.height)}
+                  height={Math.min(editorSize.width, editorSize.height)}
                 />
               )}
               {activeView === 'sequence' && (
                 <SequenceView sequence={sequence} />
               )}
-              {activeView === 'linear' && (
-                <div style={{ width: '100%', padding: '40px 30px', overflow: 'auto' }}>
-                  <div style={{ position: 'relative', height: 80 }}>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 35,
-                        left: 0,
-                        right: 0,
-                        height: 4,
-                        background: tokens.border.default,
-                        borderRadius: 2,
-                      }}
-                    />
-                    {sequence.features.map((f) => (
-                      <div
-                        key={f.id}
-                        onClick={() => selectFeature(f.id)}
-                        style={{
-                          position: 'absolute',
-                          top: 28,
-                          left: `${(f.start / sequence.length) * 100}%`,
-                          width: `${((f.end - f.start) / sequence.length) * 100}%`,
-                          height: 18,
-                          background: f.color,
-                          borderRadius: 3,
-                          opacity: selectedFeatureId === f.id ? 1 : 0.7,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          overflow: 'hidden',
-                          cursor: 'pointer',
-                          border: selectedFeatureId === f.id ? `2px solid ${tokens.text.primary}` : 'none',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 9,
-                            color: '#fff',
-                            fontWeight: 500,
-                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {f.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {activeView === 'linear' && editorSize.width > 0 && (
+                <LinearMap
+                  sequence={sequence}
+                  enzymes={DEMO_ENZYMES}
+                  width={editorSize.width}
+                  height={editorSize.height}
+                />
               )}
             </div>
 
