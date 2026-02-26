@@ -36,15 +36,6 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {
-    "dialog": {},
-    "fs": {
-      "scope": {
-        "allow": ["**"]
-      }
-    },
-    "shell": {
-      "open": true
-    }
-  }
+  "plugins": {}
+
 }

@@ -16,38 +16,27 @@ export interface CircularMapData {
  * Instead, this class owns the Application and manages layers directly.
  */
 export class CircularMapRenderer {
-  private app: Application;
-  private container: Container;
-  private backboneLayer: Container;
-  private featureLayer: Container;
-  private enzymeLayer: Container;
-  private labelLayer: Container;
-  private selectionLayer: Container;
-  private centerLayer: Container;
-  private tickLayer: Container;
+  private app: Application | null = null;
+  private container: Container | null = null;
+  private backboneLayer!: Container;
+  private featureLayer!: Container;
+  private enzymeLayer!: Container;
+  private labelLayer!: Container;
+  private selectionLayer!: Container;
+  private centerLayer!: Container;
+  private tickLayer!: Container;
 
   private data: CircularMapData | null = null;
   private width = 0;
   private height = 0;
   private initialized = false;
 
-  constructor() {
-    this.app = new Application();
-    this.container = new Container();
-    this.backboneLayer = new Container();
-    this.featureLayer = new Container();
-    this.enzymeLayer = new Container();
-    this.labelLayer = new Container();
-    this.selectionLayer = new Container();
-    this.centerLayer = new Container();
-    this.tickLayer = new Container();
-  }
-
   async init(canvas: HTMLCanvasElement, width: number, height: number) {
     this.width = width;
     this.height = height;
 
-    await this.app.init({
+    const app = new Application();
+    await app.init({
       canvas,
       width,
       height,
@@ -57,7 +46,18 @@ export class CircularMapRenderer {
       autoDensity: true,
     });
 
+    this.app = app;
+
     // Build scene graph layers (back to front)
+    this.container = new Container();
+    this.backboneLayer = new Container();
+    this.selectionLayer = new Container();
+    this.featureLayer = new Container();
+    this.enzymeLayer = new Container();
+    this.tickLayer = new Container();
+    this.labelLayer = new Container();
+    this.centerLayer = new Container();
+
     this.container.addChild(this.backboneLayer);
     this.container.addChild(this.selectionLayer);
     this.container.addChild(this.featureLayer);
@@ -78,7 +78,7 @@ export class CircularMapRenderer {
   }
 
   resize(width: number, height: number) {
-    if (!this.initialized) return;
+    if (!this.initialized || !this.app) return;
     this.width = width;
     this.height = height;
     this.app.renderer.resize(width, height);
@@ -86,7 +86,15 @@ export class CircularMapRenderer {
   }
 
   destroy() {
-    this.app.destroy(true);
+    if (!this.initialized || !this.app) return;
+    this.initialized = false;
+    try {
+      this.app.destroy(true);
+    } catch {
+      // Pixi.js v8 may throw if internal state is inconsistent
+    }
+    this.app = null;
+    this.container = null;
   }
 
   // ── Geometry helpers ──
