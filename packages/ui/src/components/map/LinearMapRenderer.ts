@@ -123,6 +123,11 @@ export class LinearMapRenderer {
     this.app.stage.addChild(this.container);
     this.initialized = true;
 
+    // If resize() was called during async init, apply the latest dimensions
+    if (this.width !== width || this.height !== height) {
+      this.app.renderer.resize(this.width, this.height);
+    }
+
     this.attachInputListeners(canvas);
   }
 
@@ -134,9 +139,10 @@ export class LinearMapRenderer {
   }
 
   resize(width: number, height: number) {
-    if (!this.initialized || !this.app) return;
+    // Always store the latest dimensions so post-init render uses them
     this.width = width;
     this.height = height;
+    if (!this.initialized || !this.app) return;
     this.app.renderer.resize(width, height);
     if (this.data) this.render();
   }
