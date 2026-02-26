@@ -327,7 +327,6 @@ export default function App() {
               {activeView === 'map' && editorSize.width > 0 && (
                 <CircularMap
                   sequence={sequence}
-                  enzymes={DEMO_ENZYMES}
                   width={editorSize.width}
                   height={editorSize.height}
                 />
@@ -338,7 +337,6 @@ export default function App() {
               {activeView === 'linear' && editorSize.width > 0 && (
                 <LinearMap
                   sequence={sequence}
-                  enzymes={DEMO_ENZYMES}
                   width={editorSize.width}
                   height={editorSize.height}
                 />

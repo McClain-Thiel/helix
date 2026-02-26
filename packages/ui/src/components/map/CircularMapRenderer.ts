@@ -434,8 +434,11 @@ export class CircularMapRenderer {
   private drawFeatureArc(feat: FeatureDto, isSelected: boolean, isHovered: boolean) {
     if (!this.data) return;
 
-    const startAngle = this.angleFor(feat.start);
-    const endAngle = this.angleFor(feat.end);
+    // Extend arcs slightly so adjacent features overlap and eliminate gaps
+    const angPerBp = (Math.PI * 2) / this.data.sequence.length;
+    const pad = angPerBp * 0.5; // half a base-pair of angular padding
+    const startAngle = this.angleFor(feat.start) - pad;
+    const endAngle = this.angleFor(feat.end) + pad;
     const color = this.hexToNum(feat.color);
 
     // All arcs use the exact same midR as the backbone
