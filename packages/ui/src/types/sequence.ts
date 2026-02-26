@@ -46,6 +46,14 @@ export interface EditorTab {
   sequenceId: string;
   name: string;
   isDirty: boolean;
+  filePath?: string;
+  fileFormat?: string;
+}
+
+export interface OpenFileResult {
+  sequences: SequenceDto[];
+  filePath: string;
+  format: string;
 }
 
 export interface EnzymeDto {

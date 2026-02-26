@@ -1,13 +1,18 @@
 import { create } from 'zustand';
 import type { SequenceDto, FeatureDto, EditorTab } from '../types/sequence';
 
+interface OpenSequenceOpts {
+  filePath?: string;
+  fileFormat?: string;
+}
+
 interface EditorState {
   sequences: Record<string, SequenceDto>;
   tabs: EditorTab[];
   activeTabId: string | null;
 
   // Actions
-  openSequence: (seq: SequenceDto) => void;
+  openSequence: (seq: SequenceDto, opts?: OpenSequenceOpts) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   updateFeature: (sequenceId: string, feature: FeatureDto) => void;
@@ -15,12 +20,12 @@ interface EditorState {
   removeFeature: (sequenceId: string, featureId: string) => void;
 }
 
-export const useEditorStore = create<EditorState>()((set, get) => ({
+export const useEditorStore = create<EditorState>()((set) => ({
   sequences: {},
   tabs: [],
   activeTabId: null,
 
-  openSequence: (seq) =>
+  openSequence: (seq, opts) =>
     set((state) => {
       // Check if already open
       const existingTab = state.tabs.find((t) => t.sequenceId === seq.id);
@@ -33,6 +38,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         sequenceId: seq.id,
         name: seq.name,
         isDirty: false,
+        filePath: opts?.filePath,
+        fileFormat: opts?.fileFormat,
       };
 
       return {
@@ -44,12 +51,26 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
 
   closeTab: (tabId) =>
     set((state) => {
+      const closingTab = state.tabs.find((t) => t.id === tabId);
       const newTabs = state.tabs.filter((t) => t.id !== tabId);
       const newActiveId =
         state.activeTabId === tabId
           ? newTabs[newTabs.length - 1]?.id ?? null
           : state.activeTabId;
-      return { tabs: newTabs, activeTabId: newActiveId };
+
+      // Clean up sequence if no other tab references it
+      let newSequences = state.sequences;
+      if (closingTab) {
+        const stillReferenced = newTabs.some(
+          (t) => t.sequenceId === closingTab.sequenceId
+        );
+        if (!stillReferenced) {
+          const { [closingTab.sequenceId]: _, ...rest } = state.sequences;
+          newSequences = rest;
+        }
+      }
+
+      return { tabs: newTabs, activeTabId: newActiveId, sequences: newSequences };
     }),
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
@@ -103,5 +124,12 @@ export function useActiveSequence(): SequenceDto | null {
     const activeTab = state.tabs.find((t) => t.id === state.activeTabId);
     if (!activeTab) return null;
     return state.sequences[activeTab.sequenceId] ?? null;
+  });
+}
+
+/** Get the active tab from the store */
+export function useActiveTab(): EditorTab | null {
+  return useEditorStore((state) => {
+    return state.tabs.find((t) => t.id === state.activeTabId) ?? null;
   });
 }

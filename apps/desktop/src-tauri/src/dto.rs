@@ -50,6 +50,14 @@ pub struct OrfDto {
     pub protein: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenFileResult {
+    pub sequences: Vec<SequenceDto>,
+    pub file_path: String,
+    pub format: String,
+}
+
 // Conversion from core types to DTOs
 impl From<&helix_core::Sequence> for SequenceDto {
     fn from(seq: &helix_core::Sequence) -> Self {
