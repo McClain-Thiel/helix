@@ -1,96 +1,183 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   tokens,
   useEditorStore,
   useActiveSequence,
+  useActiveTab,
   useSelectionStore,
   useViewStore,
   SequenceView,
   CircularMap,
+  LinearMap,
   FeatureIcon,
-  getFeatureColor,
 } from '@helix/ui';
-import type { SequenceDto, FeatureDto, EnzymeDto } from '@helix/ui';
-import { useTauriCommand } from './hooks/useTauriCommand';
-
-// Demo data matching the mockup - used when no file is loaded
-const DEMO_SEQUENCE: SequenceDto = {
-  id: 'demo-pET28a-GFP',
-  name: 'pET28a-GFP',
-  description: 'Expression vector with eGFP insert',
-  topology: 'circular',
-  sequence: generateDemoSequence(5861),
-  length: 5861,
-  features: [
-    { id: 'f1', name: 'T7 promoter', featureType: 'promoter', start: 370, end: 389, strand: 1, color: '#2dd4a8', qualifiers: [] },
-    { id: 'f2', name: 'lac operator', featureType: 'misc', start: 390, end: 412, strand: 1, color: '#9a9ba3', qualifiers: [] },
-    { id: 'f3', name: 'RBS', featureType: 'rbs', start: 413, end: 419, strand: 1, color: '#67e8f9', qualifiers: [] },
-    { id: 'f4', name: 'His6-tag', featureType: 'tag', start: 420, end: 438, strand: 1, color: '#f472b6', qualifiers: [] },
-    { id: 'f5', name: 'eGFP', featureType: 'cds', start: 470, end: 1189, strand: 1, color: '#5b9cf5', qualifiers: [] },
-    { id: 'f6', name: 'T7 terminator', featureType: 'terminator', start: 1190, end: 1237, strand: 1, color: '#ef6b6b', qualifiers: [] },
-    { id: 'f7', name: 'KanR', featureType: 'resistance', start: 1620, end: 2432, strand: -1, color: '#a78bfa', qualifiers: [] },
-    { id: 'f8', name: 'pBR322 ori', featureType: 'ori', start: 2850, end: 3464, strand: 1, color: '#f0b429', qualifiers: [] },
-    { id: 'f9', name: 'f1 ori', featureType: 'ori', start: 4580, end: 5034, strand: -1, color: '#f0b429', qualifiers: [] },
-    { id: 'f10', name: 'lacI', featureType: 'cds', start: 5040, end: 5861, strand: -1, color: '#60a5fa', qualifiers: [] },
-  ],
-};
-
-const DEMO_ENZYMES: EnzymeDto[] = [
-  { name: 'NdeI', position: 439, overhang: "5'" },
-  { name: 'NcoI', position: 296, overhang: "5'" },
-  { name: 'BamHI', position: 1189, overhang: "5'" },
-  { name: 'XhoI', position: 1194, overhang: "5'" },
-  { name: 'EcoRI', position: 192, overhang: "5'" },
-  { name: 'HindIII', position: 173, overhang: "5'" },
-];
-
-function generateDemoSequence(length: number): string {
-  const bases = 'ATCG';
-  let seq = '';
-  // Use a seeded-style approach for deterministic demo data
-  for (let i = 0; i < length; i++) {
-    seq += bases[(i * 7 + 3) % 4];
-  }
-  return seq;
-}
+import type { SequenceDto, OpenFileResult } from '@helix/ui';
 
 export default function App() {
   const openSequence = useEditorStore((s) => s.openSequence);
+  const tabs = useEditorStore((s) => s.tabs);
+  const activeTabId = useEditorStore((s) => s.activeTabId);
+  const setActiveTab = useEditorStore((s) => s.setActiveTab);
+  const closeTab = useEditorStore((s) => s.closeTab);
   const activeSeq = useActiveSequence();
-  const viewStore = useViewStore();
+  const activeTab = useActiveTab();
   const selectionStore = useSelectionStore();
-  const { selectedFeatureId, selectFeature } = selectionStore;
+  const { selectedFeatureId, selectFeature, clearSelection } = selectionStore;
 
   const [activeView, setActiveView] = useState<'map' | 'linear' | 'sequence'>('map');
-  const [bottomTab, setBottomTab] = useState('enzymes');
+  const [bottomTab, setBottomTab] = useState('features');
+  const editorAreaRef = useRef<HTMLDivElement>(null);
+  const [editorSize, setEditorSize] = useState({ width: 600, height: 400 });
+  const [error, setError] = useState<string | null>(null);
 
-  // Load demo sequence on mount
+  // Measure editor area size
   useEffect(() => {
-    openSequence(DEMO_SEQUENCE);
-  }, [openSequence]);
+    const el = editorAreaRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setEditorSize({ width: Math.floor(width), height: Math.floor(height) });
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
-  const sequence = activeSeq ?? DEMO_SEQUENCE;
-  const selectedFeature = sequence.features.find((f) => f.id === selectedFeatureId);
+  // Clear selection on tab switch
+  useEffect(() => {
+    clearSelection();
+  }, [activeTabId, clearSelection]);
 
-  // Open file via Tauri
+  // Open file via Tauri dialog
   const handleOpenFile = useCallback(async () => {
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
       const path = await open({
         filters: [
-          { name: 'Sequence Files', extensions: ['gb', 'gbk', 'fasta', 'fa'] },
+          { name: 'Sequence Files', extensions: ['gb', 'gbk', 'genbank', 'fasta', 'fa', 'fna'] },
           { name: 'All Files', extensions: ['*'] },
         ],
       });
       if (path && typeof path === 'string') {
         const { invoke } = await import('@tauri-apps/api/core');
-        const dto = await invoke<SequenceDto>('open_sequence_file', { path });
-        openSequence(dto);
+        const result = await invoke<OpenFileResult>('open_sequence_file', { path });
+        for (const seq of result.sequences) {
+          openSequence(seq, { filePath: result.filePath, fileFormat: result.format });
+        }
+        setError(null);
       }
     } catch (e) {
-      console.warn('File open not available (running in browser?):', e);
+      const msg = String(e);
+      if (msg.includes('cancelled') || msg.includes('user abort')) return;
+      setError(msg);
+      console.error('File open failed:', e);
     }
   }, [openSequence]);
+
+  // Create new blank sequence
+  const handleNewSequence = useCallback(() => {
+    const id = `seq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const newSeq: SequenceDto = {
+      id,
+      name: 'Untitled',
+      description: '',
+      topology: 'circular',
+      sequence: '',
+      length: 0,
+      features: [],
+    };
+    openSequence(newSeq);
+  }, [openSequence]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Cmd+O / Ctrl+O — open file
+      if ((e.metaKey || e.ctrlKey) && e.code === 'KeyO') {
+        e.preventDefault();
+        handleOpenFile();
+        return;
+      }
+      // Cmd+N / Ctrl+N — new sequence
+      if ((e.metaKey || e.ctrlKey) && e.code === 'KeyN') {
+        e.preventDefault();
+        handleNewSequence();
+        return;
+      }
+      // Cmd+W / Ctrl+W — close active tab
+      if ((e.metaKey || e.ctrlKey) && e.code === 'KeyW') {
+        e.preventDefault();
+        if (activeTabId) closeTab(activeTabId);
+        return;
+      }
+      // Space — toggle map/linear
+      if (e.code === 'Space' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setActiveView((v) => v === 'map' ? 'linear' : v === 'linear' ? 'map' : v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleOpenFile, handleNewSequence, activeTabId, closeTab]);
+
+  // ── Welcome screen (no tabs open) ──
+  if (tabs.length === 0) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100vh',
+          background: tokens.bg.app,
+          color: tokens.text.primary,
+          fontFamily: tokens.font.sans,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 24,
+          userSelect: 'none',
+        }}
+      >
+        <svg width="48" height="48" viewBox="0 0 20 20" fill="none">
+          <path d="M10 2C6 2 4 5 4 10s2 8 6 8 6-3 6-8-2-8-6-8z" stroke={tokens.accent.teal} strokeWidth="1.5" fill="none" />
+          <path d="M6.5 6.5Q10 9 13.5 6.5M6.5 10Q10 13 13.5 10M6.5 13.5Q10 16 13.5 13.5" stroke={tokens.accent.teal} strokeWidth="1" opacity="0.6" />
+        </svg>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: tokens.font.display, fontWeight: 600, fontSize: 22, marginBottom: 6 }}>
+            Helix
+          </div>
+          <div style={{ fontSize: 13, color: tokens.text.tertiary }}>
+            Molecular cloning & sequence design
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          <button onClick={handleOpenFile} style={welcomeButton}>
+            Open File
+            <span style={shortcutHint}>{navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl+'}O</span>
+          </button>
+          <button onClick={handleNewSequence} style={{ ...welcomeButton, background: tokens.bg.surface, borderColor: tokens.border.default }}>
+            New Sequence
+            <span style={shortcutHint}>{navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl+'}N</span>
+          </button>
+        </div>
+        {error && (
+          <div style={{ color: '#ef6b6b', fontSize: 12, maxWidth: 400, textAlign: 'center', marginTop: 8 }}>
+            {error}
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: tokens.text.tertiary, marginTop: 16 }}>
+          Supports GenBank (.gb, .gbk) and FASTA (.fasta, .fa) files
+        </div>
+      </div>
+    );
+  }
+
+  // ── Editor layout ──
+  const sequence = activeSeq;
+  const selectedFeature = sequence?.features.find((f) => f.id === selectedFeatureId);
 
   return (
     <div
@@ -131,25 +218,61 @@ export default function App() {
           </span>
         </div>
 
-        {/* File tabs */}
-        <div style={{ display: 'flex', gap: 2, flex: 1 }}>
-          <div
-            style={{
-              padding: '5px 14px',
-              borderRadius: tokens.radius.md,
-              fontSize: 12,
-              fontWeight: 500,
-              background: tokens.bg.surface,
-              color: tokens.text.primary,
-              border: `1px solid ${tokens.border.default}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: tokens.accent.teal, opacity: 0.6 }} />
-            {sequence.name}
-          </div>
+        {/* Tab bar — driven by store */}
+        <div style={{ display: 'flex', gap: 2, flex: 1, overflow: 'hidden' }}>
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                padding: '5px 10px',
+                paddingRight: 6,
+                borderRadius: tokens.radius.md,
+                fontSize: 12,
+                fontWeight: activeTabId === tab.id ? 500 : 400,
+                background: activeTabId === tab.id ? tokens.bg.surface : 'transparent',
+                color: activeTabId === tab.id ? tokens.text.primary : tokens.text.tertiary,
+                border: activeTabId === tab.id ? `1px solid ${tokens.border.default}` : '1px solid transparent',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+                flexShrink: 0,
+                maxWidth: 180,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: tokens.accent.teal,
+                  opacity: 0.6,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {tab.name}
+              </span>
+              {tab.isDirty && (
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: tokens.text.tertiary, flexShrink: 0 }} />
+              )}
+              <span
+                onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
+                style={{
+                  fontSize: 14,
+                  color: tokens.text.tertiary,
+                  cursor: 'pointer',
+                  padding: '0 2px',
+                  lineHeight: 1,
+                  flexShrink: 0,
+                  opacity: 0.5,
+                }}
+              >
+                ×
+              </span>
+            </div>
+          ))}
           <div
             onClick={handleOpenFile}
             style={{
@@ -158,32 +281,54 @@ export default function App() {
               color: tokens.text.tertiary,
               cursor: 'pointer',
               fontSize: 14,
+              flexShrink: 0,
             }}
           >
             +
           </div>
         </div>
 
-        {/* Status bar info */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: tokens.text.tertiary, fontFamily: tokens.font.mono }}>
-            {sequence.length.toLocaleString()} bp
-          </span>
-          <span style={{ fontSize: 10, color: tokens.text.tertiary }}>|</span>
-          <span
-            style={{
-              fontSize: 10,
-              color: tokens.accent.teal,
-              fontFamily: tokens.font.mono,
-              padding: '1px 6px',
-              borderRadius: tokens.radius.sm,
-              background: tokens.accent.tealBg,
-            }}
-          >
-            {sequence.topology}
-          </span>
-        </div>
+        {/* Status bar */}
+        {sequence && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+            <span style={{ fontSize: 10, color: tokens.text.tertiary, fontFamily: tokens.font.mono }}>
+              {sequence.length.toLocaleString()} bp
+            </span>
+            <span style={{ fontSize: 10, color: tokens.text.tertiary }}>|</span>
+            <span
+              style={{
+                fontSize: 10,
+                color: tokens.accent.teal,
+                fontFamily: tokens.font.mono,
+                padding: '1px 6px',
+                borderRadius: tokens.radius.sm,
+                background: tokens.accent.tealBg,
+              }}
+            >
+              {sequence.topology}
+            </span>
+          </div>
+        )}
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div
+          style={{
+            padding: '6px 16px',
+            background: '#2a1215',
+            borderBottom: `1px solid #5c2025`,
+            color: '#ef6b6b',
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ flex: 1 }}>{error}</span>
+          <span onClick={() => setError(null)} style={{ cursor: 'pointer', opacity: 0.6 }}>×</span>
+        </div>
+      )}
 
       {/* Main Content */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -201,37 +346,46 @@ export default function App() {
         >
           <div style={{ padding: '8px 10px 4px' }}>
             <div style={sectionHeader}>Features</div>
-            {sequence.features.map((f) => (
-              <div
-                key={f.id}
-                onClick={() => selectFeature(f.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '5px 8px',
-                  borderRadius: tokens.radius.sm,
-                  cursor: 'pointer',
-                  background: selectedFeatureId === f.id ? tokens.accent.tealBg : 'transparent',
-                  border: selectedFeatureId === f.id ? `1px solid ${tokens.accent.tealBorder}` : '1px solid transparent',
-                }}
-              >
-                <FeatureIcon type={f.featureType} color={f.color} />
-                <span
+            {sequence && sequence.features.length > 0 ? (
+              sequence.features.map((f) => (
+                <div
+                  key={f.id}
+                  onClick={() => selectFeature(f.id)}
                   style={{
-                    fontSize: 12,
-                    flex: 1,
-                    color: selectedFeatureId === f.id ? tokens.text.primary : tokens.text.secondary,
-                    fontWeight: selectedFeatureId === f.id ? 500 : 400,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '5px 8px',
+                    borderRadius: tokens.radius.sm,
+                    cursor: 'pointer',
+                    background: selectedFeatureId === f.id ? tokens.accent.tealBg : 'transparent',
+                    border: selectedFeatureId === f.id ? `1px solid ${tokens.accent.tealBorder}` : '1px solid transparent',
                   }}
                 >
-                  {f.name}
-                </span>
-                <span style={{ fontSize: 9, color: tokens.text.tertiary, fontFamily: tokens.font.mono }}>
-                  {f.strand === -1 ? '\u25C4' : '\u25BA'}
-                </span>
+                  <FeatureIcon type={f.featureType} color={f.color} />
+                  <span
+                    style={{
+                      fontSize: 12,
+                      flex: 1,
+                      color: selectedFeatureId === f.id ? tokens.text.primary : tokens.text.secondary,
+                      fontWeight: selectedFeatureId === f.id ? 500 : 400,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {f.name}
+                  </span>
+                  <span style={{ fontSize: 9, color: tokens.text.tertiary, fontFamily: tokens.font.mono }}>
+                    {f.strand === -1 ? '\u25C4' : '\u25BA'}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize: 11, color: tokens.text.tertiary, padding: '8px 4px' }}>
+                {sequence ? 'No features annotated' : 'No file open'}
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -281,6 +435,7 @@ export default function App() {
           {/* Editor area */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div
+              ref={editorAreaRef}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -291,66 +446,29 @@ export default function App() {
                 overflow: 'hidden',
               }}
             >
-              {activeView === 'map' && (
-                <CircularMap
-                  sequence={sequence}
-                  enzymes={DEMO_ENZYMES}
-                  width={480}
-                  height={440}
-                />
-              )}
-              {activeView === 'sequence' && (
-                <SequenceView sequence={sequence} />
-              )}
-              {activeView === 'linear' && (
-                <div style={{ width: '100%', padding: '40px 30px', overflow: 'auto' }}>
-                  <div style={{ position: 'relative', height: 80 }}>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 35,
-                        left: 0,
-                        right: 0,
-                        height: 4,
-                        background: tokens.border.default,
-                        borderRadius: 2,
-                      }}
+              {sequence ? (
+                <>
+                  {activeView === 'map' && editorSize.width > 0 && (
+                    <CircularMap
+                      sequence={sequence}
+                      width={editorSize.width}
+                      height={editorSize.height}
                     />
-                    {sequence.features.map((f) => (
-                      <div
-                        key={f.id}
-                        onClick={() => selectFeature(f.id)}
-                        style={{
-                          position: 'absolute',
-                          top: 28,
-                          left: `${(f.start / sequence.length) * 100}%`,
-                          width: `${((f.end - f.start) / sequence.length) * 100}%`,
-                          height: 18,
-                          background: f.color,
-                          borderRadius: 3,
-                          opacity: selectedFeatureId === f.id ? 1 : 0.7,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          overflow: 'hidden',
-                          cursor: 'pointer',
-                          border: selectedFeatureId === f.id ? `2px solid ${tokens.text.primary}` : 'none',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 9,
-                            color: '#fff',
-                            fontWeight: 500,
-                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {f.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  )}
+                  {activeView === 'sequence' && (
+                    <SequenceView sequence={sequence} />
+                  )}
+                  {activeView === 'linear' && editorSize.width > 0 && (
+                    <LinearMap
+                      sequence={sequence}
+                      width={editorSize.width}
+                      height={editorSize.height}
+                    />
+                  )}
+                </>
+              ) : (
+                <div style={{ color: tokens.text.tertiary, fontSize: 13 }}>
+                  No sequence loaded
                 </div>
               )}
             </div>
@@ -374,7 +492,7 @@ export default function App() {
                   borderBottom: `1px solid ${tokens.border.subtle}`,
                 }}
               >
-                {['enzymes', 'primers', 'features', 'history'].map((t) => (
+                {['features', 'history'].map((t) => (
                   <button
                     key={t}
                     onClick={() => setBottomTab(t)}
@@ -397,40 +515,32 @@ export default function App() {
                 ))}
               </div>
               <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
-                {bottomTab === 'enzymes' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4 }}>
-                    {DEMO_ENZYMES.map((e) => (
+                {bottomTab === 'features' && sequence && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                    {sequence.features.map((f) => (
                       <div
-                        key={e.name}
+                        key={f.id}
+                        onClick={() => selectFeature(f.id)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: 8,
                           padding: '6px 10px',
                           borderRadius: tokens.radius.sm,
-                          background: tokens.bg.surface,
-                          border: `1px solid ${tokens.border.subtle}`,
+                          background: selectedFeatureId === f.id ? tokens.accent.tealBg : tokens.bg.surface,
+                          border: `1px solid ${selectedFeatureId === f.id ? tokens.accent.tealBorder : tokens.border.subtle}`,
                           cursor: 'pointer',
                         }}
                       >
-                        <span style={{ fontSize: 11, color: tokens.accent.amber, fontFamily: tokens.font.mono, fontWeight: 500, width: 50 }}>
-                          {e.name}
-                        </span>
-                        <span style={{ fontSize: 10, color: tokens.text.tertiary, fontFamily: tokens.font.mono }}>
-                          {e.position}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 9,
-                            color: tokens.text.tertiary,
-                            padding: '1px 5px',
-                            background: tokens.accent.amberBg,
-                            borderRadius: tokens.radius.sm,
-                            marginLeft: 'auto',
-                          }}
-                        >
-                          {e.overhang}
-                        </span>
+                        <FeatureIcon type={f.featureType} color={f.color} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.name}
+                          </div>
+                          <div style={{ fontSize: 9, color: tokens.text.tertiary, fontFamily: tokens.font.mono }}>
+                            {f.start.toLocaleString()}..{f.end.toLocaleString()}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -477,8 +587,8 @@ export default function App() {
                   </div>
                 </div>
                 {[
-                  { label: 'Position', value: `${selectedFeature.start}..${selectedFeature.end}` },
-                  { label: 'Length', value: `${selectedFeature.end - selectedFeature.start} bp` },
+                  { label: 'Position', value: `${selectedFeature.start.toLocaleString()}..${selectedFeature.end.toLocaleString()}` },
+                  { label: 'Length', value: `${(selectedFeature.end - selectedFeature.start).toLocaleString()} bp` },
                   { label: 'Strand', value: selectedFeature.strand === 1 ? 'Forward (+)' : selectedFeature.strand === -1 ? 'Reverse (\u2212)' : 'None' },
                 ].map((row) => (
                   <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0 2px' }}>
@@ -500,25 +610,56 @@ export default function App() {
           {/* Computed */}
           <div style={{ padding: '12px 14px' }}>
             <div style={sectionHeader}>Computed</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[
-                { label: 'GC Content', value: '51.2%', bar: 0.512, color: tokens.accent.teal },
-                { label: 'Length', value: `${sequence.length.toLocaleString()} bp`, bar: 1.0, color: tokens.accent.blue },
-              ].map((m) => (
-                <div key={m.label} style={{ padding: '6px 0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: tokens.text.secondary }}>{m.label}</span>
-                    <span style={{ fontSize: 11, color: tokens.text.primary, fontFamily: tokens.font.mono, fontWeight: 500 }}>{m.value}</span>
-                  </div>
-                  <div style={{ height: 3, background: tokens.bg.hover, borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${m.bar * 100}%`, background: m.color, borderRadius: 2, opacity: 0.6 }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            {sequence && sequence.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <ComputedRow label="GC Content" value={gcContent(sequence.sequence)} bar color={tokens.accent.teal} />
+                <ComputedRow label="Length" value={`${sequence.length.toLocaleString()} bp`} />
+                <ComputedRow label="Features" value={String(sequence.features.length)} />
+                {activeTab?.fileFormat && (
+                  <ComputedRow label="Format" value={activeTab.fileFormat.toUpperCase()} />
+                )}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: tokens.text.tertiary, padding: '8px 0' }}>
+                No sequence loaded
+              </div>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Helpers ──
+
+function gcContent(seq: string): string {
+  if (seq.length === 0) return '0%';
+  let gc = 0;
+  for (const c of seq) {
+    if (c === 'G' || c === 'g' || c === 'C' || c === 'c') gc++;
+  }
+  return `${((gc / seq.length) * 100).toFixed(1)}%`;
+}
+
+function ComputedRow({ label, value, bar, color }: {
+  label: string;
+  value: string;
+  bar?: boolean;
+  color?: string;
+}) {
+  const numericPart = bar ? parseFloat(value) / 100 : 0;
+  return (
+    <div style={{ padding: '6px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: bar ? 4 : 0 }}>
+        <span style={{ fontSize: 11, color: tokens.text.secondary }}>{label}</span>
+        <span style={{ fontSize: 11, color: tokens.text.primary, fontFamily: tokens.font.mono, fontWeight: 500 }}>{value}</span>
+      </div>
+      {bar && color && (
+        <div style={{ height: 3, background: tokens.bg.hover, borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${numericPart * 100}%`, background: color, borderRadius: 2, opacity: 0.6 }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -530,4 +671,25 @@ const sectionHeader: React.CSSProperties = {
   letterSpacing: '0.06em',
   color: tokens.text.tertiary,
   marginBottom: 10,
+};
+
+const welcomeButton: React.CSSProperties = {
+  padding: '10px 20px',
+  borderRadius: '8px',
+  border: `1px solid ${tokens.accent.teal}`,
+  background: tokens.accent.tealBg,
+  color: tokens.text.primary,
+  fontSize: 14,
+  fontWeight: 500,
+  cursor: 'pointer',
+  fontFamily: tokens.font.sans,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+};
+
+const shortcutHint: React.CSSProperties = {
+  fontSize: 10,
+  color: tokens.text.tertiary,
+  fontFamily: tokens.font.mono,
 };
