@@ -45,20 +45,17 @@ Helix is an open-source molecular cloning & sequence design desktop app built wi
 ## Environment Setup
 
 ```bash
-# Rust (via rustup)
-export PATH="$HOME/.cargo/bin:$PATH"
-
-# Node (via fnm)
-eval "$(fnm env)"
+# Prerequisites: Rust (via rustup), Node.js, pnpm
+export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
 
 # Install deps
 pnpm install
 
-# Dev server
-pnpm dev
+# Dev server (starts Vite + Tauri)
+cd apps/desktop && pnpm dev
 ```
 
-No Homebrew is available (no sudo). Tools are installed via rustup, fnm, and corepack.
+See `CONTRIBUTING.md` for full setup instructions.
 
 ## Key Files to Understand
 
@@ -86,12 +83,16 @@ No Homebrew is available (no sudo). Tools are installed via rustup, fnm, and cor
 
 ## Current Status
 
-Phase 1, Steps 1-6 complete:
+Phase 1, Steps 1-8 complete:
 1. Monorepo scaffolding
 2. Rust core data model + GenBank/FASTA parsers (41 tests)
 3. Tauri command bridge
 4. Design system + shared UI package
 5. Virtualized sequence text view
 6. Pixi.js v8 circular map static PoC
+7. Interactive circular map (zoom, pan, hover, selection, label displacement)
+8. Linear map view (track packing, same interaction model)
 
-Next: Steps 7-17 (interactive map, linear map, restriction enzymes, cloning, versioning).
+Also complete: Real file-open architecture (Tauri dialog + Rust parser + store), welcome screen, multi-tab editor with file metadata tracking.
+
+Next: Steps 9-17 (SBOL glyphs, view sync, restriction enzymes, cloning, primer design, versioning).
