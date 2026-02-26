@@ -371,11 +371,16 @@ export class CircularMapRenderer {
     this.clearAll();
 
     this.drawBackbone();
-    this.drawTickMarks(sequence.length);
-    this.drawSelectionHighlight(selection);
-    this.drawFeatures(sequence.features, selectedFeatureId ?? null);
-    if (enzymes) this.drawEnzymes(enzymes);
-    this.drawLabels(sequence.features, selectedFeatureId ?? null);
+
+    // Only draw position-dependent elements when sequence has content
+    if (sequence.length > 0) {
+      this.drawTickMarks(sequence.length);
+      this.drawSelectionHighlight(selection);
+      this.drawFeatures(sequence.features, selectedFeatureId ?? null);
+      if (enzymes) this.drawEnzymes(enzymes);
+      this.drawLabels(sequence.features, selectedFeatureId ?? null);
+    }
+
     this.drawCenterText(sequence);
   }
 
@@ -391,9 +396,15 @@ export class CircularMapRenderer {
 
   private drawBackbone() {
     const g = new Graphics();
-    // Draw backbone as stroked circle — all feature arcs use the same midR
-    g.circle(this.cx, this.cy, this.midR);
-    g.stroke({ width: this.trackWidth, color: this.hexToNum(tokens.border.default) });
+    const isEmpty = !this.data || this.data.sequence.length === 0;
+    if (isEmpty) {
+      // Bright visible ring for empty sequences
+      g.circle(this.cx, this.cy, this.midR);
+      g.stroke({ width: this.trackWidth, color: this.hexToNum(tokens.accent.tealMuted), alpha: 0.3 });
+    } else {
+      g.circle(this.cx, this.cy, this.midR);
+      g.stroke({ width: this.trackWidth, color: this.hexToNum(tokens.border.default) });
+    }
     this.backboneLayer.addChild(g);
   }
 
@@ -650,6 +661,8 @@ export class CircularMapRenderer {
   }
 
   private drawCenterText(sequence: SequenceDto) {
+    const isEmpty = sequence.length === 0;
+
     const nameText = new Text({
       text: sequence.name,
       style: new TextStyle({
@@ -661,11 +674,11 @@ export class CircularMapRenderer {
     });
     nameText.anchor.set(0.5, 0.5);
     nameText.x = this.cx;
-    nameText.y = this.cy - 14;
+    nameText.y = this.cy - (isEmpty ? 20 : 14);
     this.centerLayer.addChild(nameText);
 
     const bpText = new Text({
-      text: `${sequence.length.toLocaleString()} bp`,
+      text: isEmpty ? 'Empty sequence' : `${sequence.length.toLocaleString()} bp`,
       style: new TextStyle({
         fontSize: 12,
         fontFamily: tokens.font.mono,
@@ -674,20 +687,20 @@ export class CircularMapRenderer {
     });
     bpText.anchor.set(0.5, 0.5);
     bpText.x = this.cx;
-    bpText.y = this.cy + 6;
+    bpText.y = this.cy + (isEmpty ? 2 : 6);
     this.centerLayer.addChild(bpText);
 
     const topoText = new Text({
-      text: sequence.topology,
+      text: isEmpty ? 'Paste or import a sequence to begin' : sequence.topology,
       style: new TextStyle({
-        fontSize: 10,
+        fontSize: isEmpty ? 11 : 10,
         fontFamily: 'DM Sans, sans-serif',
         fill: tokens.text.tertiary,
       }),
     });
     topoText.anchor.set(0.5, 0.5);
     topoText.x = this.cx;
-    topoText.y = this.cy + 22;
+    topoText.y = this.cy + (isEmpty ? 22 : 22);
     this.centerLayer.addChild(topoText);
   }
 }

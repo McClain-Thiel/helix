@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0-alpha.2] - 2026-02-26
+
+### Added
+
+**Component Database (`crates/helix-components/`)**
+- New `helix-components` crate with SQLite-backed component storage
+- 164 built-in components (67 DNA, 97 protein) converted from ApE default features
+- CSV seed data at `crates/helix-components/data/components.csv`
+- Categories: promoter, cds, terminator, ori, resistance, primer, recombination, misc, signal_peptide
+- CRUD operations via `ComponentDb` (list, get, insert by category)
+
+**Auto-Annotation Engine**
+- Banded Smith-Waterman local alignment (`crates/helix-core/src/alignment.rs`) with affine gap penalties
+- Both-strand alignment (forward + reverse complement)
+- Annotation orchestrator (`crates/helix-components/src/annotate.rs`): configurable identity/coverage thresholds, overlap resolution via greedy interval scheduling
+- Tauri commands: `list_components`, `auto_annotate`
+- DTO types: `ComponentDto`, `AnnotationHitDto`
+
+**Component Library Sidebar**
+- Left sidebar component library with expandable categories sorted by type
+- Search bar for filtering components by name
+- Auto-Annotate button (runs SW alignment against all DNA components)
+- Annotation hits panel with per-hit apply and bulk apply-all
+- Hits display identity %, position range, and strand direction
+
+**Empty Sequence Handling**
+- Circular map renders visible teal-tinted backbone ring for empty sequences
+- Center text shows "Empty sequence" with "Paste or import a sequence to begin" hint
+- Linear map renders placeholder backbone with name and hint text
+- Guards against NaN from division by zero in position calculations
+
+### Fixed
+- ResizeObserver not attaching when transitioning from welcome screen to editor (empty `[]` dependency)
+- Tab bar + button dropdown clipped by `overflow: hidden` (now uses `position: fixed`)
+- Division by zero in `CircularMapRenderer.angleFor()` and `LinearMapRenderer.posToX()` for empty sequences
+- 3 pre-existing alignment test assertions that were too strict for local alignment behavior
+
 ## [0.1.0-alpha.1] - 2026-02-26
 
 ### Added

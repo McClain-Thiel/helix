@@ -393,11 +393,61 @@ export class LinearMapRenderer {
     const { sequence, enzymes, selectedFeatureId, selection } = this.data;
 
     this.clearAll();
+
+    if (sequence.length === 0) {
+      this.drawEmptyState(sequence.name);
+      return;
+    }
+
     this.drawBackbone(sequence.length);
     this.drawTickMarks(sequence.length);
     this.drawSelectionHighlight(selection);
     this.drawFeatures(selectedFeatureId ?? null);
     if (enzymes) this.drawEnzymes(enzymes);
+  }
+
+  private drawEmptyState(name: string) {
+    // Draw a simple backbone line placeholder
+    const g = new Graphics();
+    const x1 = this.MARGIN_LEFT;
+    const x2 = this.width - this.MARGIN_RIGHT;
+    const y = this.height / 2;
+
+    g.moveTo(x1, y);
+    g.lineTo(x2, y);
+    g.stroke({ width: 4, color: this.hexToNum(tokens.border.strong) });
+    g.circle(x1, y, 4);
+    g.fill({ color: this.hexToNum(tokens.border.strong) });
+    g.circle(x2, y, 4);
+    g.fill({ color: this.hexToNum(tokens.border.strong) });
+    this.backboneLayer.addChild(g);
+
+    const text = new Text({
+      text: name || 'Untitled',
+      style: new TextStyle({
+        fontSize: 14,
+        fontFamily: 'DM Sans, sans-serif',
+        fontWeight: '600',
+        fill: tokens.text.primary,
+      }),
+    });
+    text.anchor.set(0.5, 0.5);
+    text.x = this.width / 2;
+    text.y = y - 24;
+    this.labelLayer.addChild(text);
+
+    const hint = new Text({
+      text: 'Paste or import a sequence to begin',
+      style: new TextStyle({
+        fontSize: 11,
+        fontFamily: 'DM Sans, sans-serif',
+        fill: tokens.text.tertiary,
+      }),
+    });
+    hint.anchor.set(0.5, 0.5);
+    hint.x = this.width / 2;
+    hint.y = y + 24;
+    this.labelLayer.addChild(hint);
   }
 
   private clearAll() {

@@ -61,3 +61,26 @@ export interface EnzymeDto {
   position: number;
   overhang: string;
 }
+
+export interface ComponentDto {
+  id: number;
+  name: string;
+  category: string;
+  length: number;
+  description?: string;
+  organism?: string;
+  isBuiltin: boolean;
+}
+
+export interface AnnotationHitDto {
+  componentName: string;
+  componentId: number;
+  category: string;
+  targetStart: number;
+  targetEnd: number;
+  strand: -1 | 1;
+  percentIdentity: number;
+  queryCoverage: number;
+  alignmentScore: number;
+  color: string;
+}

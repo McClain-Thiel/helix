@@ -4,6 +4,7 @@ members = [
     "crates/helix-core",
     "crates/helix-formats",
     "crates/helix-version",
+    "crates/helix-components",
     "apps/desktop/src-tauri",
 ]
 
@@ -27,3 +28,4 @@ regex = "1.12"
 helix-core = { path = "crates/helix-core" }
 helix-formats = { path = "crates/helix-formats" }
 helix-version = { path = "crates/helix-version" }
+helix-components = { path = "crates/helix-components" }

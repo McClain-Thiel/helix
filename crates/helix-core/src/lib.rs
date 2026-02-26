@@ -1,3 +1,4 @@
+pub mod alignment;
 pub mod codon;
 pub mod feature;
 pub mod operations;

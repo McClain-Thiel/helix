@@ -52,14 +52,33 @@ pub fn detect_file_format(path: String) -> Result<String, String> {
     Ok(format!("{:?}", format))
 }
 
-/// Save a sequence to a file in GenBank format
+/// Save a sequence to a file. Format is determined by file extension.
+/// Accepts the sequence as a JSON string matching SequenceDto.
 #[tauri::command]
 pub fn save_sequence_file(path: String, sequence_json: String) -> Result<(), String> {
-    let _seq: serde_json::Value =
+    let dto: SequenceDto =
         serde_json::from_str(&sequence_json).map_err(|e| format!("Invalid JSON: {}", e))?;
+    let seq = dto.to_core_sequence();
 
-    // For now, we just write the JSON. Full serialization comes with export in Step 15.
-    std::fs::write(&path, &sequence_json).map_err(|e| format!("Failed to write file: {}", e))?;
+    let content = if path.to_lowercase().ends_with(".fasta")
+        || path.to_lowercase().ends_with(".fa")
+        || path.to_lowercase().ends_with(".fna")
+    {
+        helix_formats::fasta::serialize(&[seq])
+    } else {
+        // Default to GenBank
+        helix_formats::genbank::serialize(&seq)
+    };
 
+    std::fs::write(&path, &content).map_err(|e| format!("Failed to write file: {}", e))?;
     Ok(())
+}
+
+/// Export a sequence as a GenBank format string (for preview/clipboard)
+#[tauri::command]
+pub fn export_genbank(sequence_json: String) -> Result<String, String> {
+    let dto: SequenceDto =
+        serde_json::from_str(&sequence_json).map_err(|e| format!("Invalid JSON: {}", e))?;
+    let seq = dto.to_core_sequence();
+    Ok(helix_formats::genbank::serialize(&seq))
 }
