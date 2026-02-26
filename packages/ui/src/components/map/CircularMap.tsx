@@ -114,8 +114,16 @@ export function CircularMap({
     });
   }, [sequence, enzymes, selectedFeatureId, selection]);
 
-  // Handle resize
+  // Handle resize — update both the Pixi renderer and the canvas CSS
   useEffect(() => {
+    const container = containerRef.current;
+    if (container) {
+      const canvas = container.querySelector('canvas');
+      if (canvas) {
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+      }
+    }
     rendererRef.current?.resize(width, height);
   }, [width, height]);
 
