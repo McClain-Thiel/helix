@@ -27,8 +27,9 @@ export default function App() {
   const [activeView, setActiveView] = useState<'map' | 'linear' | 'sequence'>('map');
   const [bottomTab, setBottomTab] = useState('features');
   const editorAreaRef = useRef<HTMLDivElement>(null);
-  const [editorSize, setEditorSize] = useState({ width: 600, height: 400 });
+  const [editorSize, setEditorSize] = useState({ width: 0, height: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
 
   // Measure editor area size
   useEffect(() => {
@@ -273,18 +274,61 @@ export default function App() {
               </span>
             </div>
           ))}
-          <div
-            onClick={handleOpenFile}
-            style={{
-              padding: '5px 10px',
-              borderRadius: tokens.radius.md,
-              color: tokens.text.tertiary,
-              cursor: 'pointer',
-              fontSize: 14,
-              flexShrink: 0,
-            }}
-          >
-            +
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div
+              onClick={() => setShowPlusMenu((v) => !v)}
+              style={{
+                padding: '5px 10px',
+                borderRadius: tokens.radius.md,
+                color: tokens.text.tertiary,
+                cursor: 'pointer',
+                fontSize: 14,
+              }}
+            >
+              +
+            </div>
+            {showPlusMenu && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                  onClick={() => setShowPlusMenu(false)}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: 4,
+                    background: tokens.bg.surface,
+                    border: `1px solid ${tokens.border.default}`,
+                    borderRadius: tokens.radius.md,
+                    padding: 4,
+                    zIndex: 100,
+                    minWidth: 160,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  <div
+                    onClick={() => { setShowPlusMenu(false); handleOpenFile(); }}
+                    style={plusMenuItem}
+                  >
+                    Open File
+                    <span style={{ fontSize: 10, color: tokens.text.tertiary, fontFamily: tokens.font.mono, marginLeft: 'auto' }}>
+                      {navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl+'}O
+                    </span>
+                  </div>
+                  <div
+                    onClick={() => { setShowPlusMenu(false); handleNewSequence(); }}
+                    style={plusMenuItem}
+                  >
+                    New Sequence
+                    <span style={{ fontSize: 10, color: tokens.text.tertiary, fontFamily: tokens.font.mono, marginLeft: 'auto' }}>
+                      {navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl+'}N
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -692,4 +736,16 @@ const shortcutHint: React.CSSProperties = {
   fontSize: 10,
   color: tokens.text.tertiary,
   fontFamily: tokens.font.mono,
+};
+
+const plusMenuItem: React.CSSProperties = {
+  padding: '6px 10px',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: 12,
+  color: tokens.text.primary,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  fontFamily: tokens.font.sans,
 };
